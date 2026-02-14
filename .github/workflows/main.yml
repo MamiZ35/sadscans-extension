@@ -1,0 +1,56 @@
+name: Build Sadscans Extension
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      
+    - name: Set up JDK 11
+      uses: actions/setup-java@v3
+      with:
+        java-version: '11'
+        distribution: 'temurin'
+        
+    - name: Clone Tachiyomi Extensions
+      run: |
+        git clone https://github.com/tachiyomiorg/tachiyomi-extensions.git
+        cd tachiyomi-extensions
+        
+    - name: Copy Extension Files
+      run: |
+        mkdir -p tachiyomi-extensions/src/tr/sadscans
+        cp src/Sadscans.kt tachiyomi-extensions/src/tr/sadscans/
+        cp src/build.gradle.kts tachiyomi-extensions/src/tr/sadscans/
+        
+    - name: Build Extension
+      run: |
+        cd tachiyomi-extensions
+        chmod +x gradlew
+        ./gradlew assembleDebug
+        
+    - name: Find APK
+      run: |
+        find tachiyomi-extensions -name "*.apk" -type f
+        
+    - name: Upload APK
+      uses: actions/upload-artifact@v3
+      with:
+        name: sadscans-extension
+        path: tachiyomi-extensions/**/build/outputs/apk/debug/*.apk
+        if-no-files-found: error
+        
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      if: startsWith(github.ref, 'refs/tags/')
+      with:
+        files: tachiyomi-extensions/**/build/outputs/apk/debug/*.apk
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
