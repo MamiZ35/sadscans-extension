@@ -2,120 +2,66 @@ name: Build Sadscans Extension
 
 on:
   workflow_dispatch:
-  push:
-    branches: [ main ]
 
 jobs:
   build:
     runs-on: ubuntu-latest
     
     steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-      
-    - name: Set up JDK 17
-      uses: actions/setup-java@v4
+    - uses: actions/checkout@v4
+    
+    - uses: actions/setup-java@v4
       with:
         java-version: '17'
         distribution: 'temurin'
     
-    - name: Download Tachiyomi Stub
-      run: |
-        mkdir -p lib
-        wget https://github.com/tachiyomiorg/tachiyomi-extensions/raw/master/lib/tachiyomi-lib-1.5.aar -O lib/tachiyomi-lib.aar || echo "Stub download failed, continuing..."
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v3
+      with:
+        gradle-version: '8.5'
     
-    - name: Create Simple APK Build
+    - name: Create Project Structure
       run: |
-        # Basit bir Android projesi oluştur
         mkdir -p app/src/main/java/eu/kanade/tachiyomi/extension/tr/sadscans
         cp src/Sadscans.kt app/src/main/java/eu/kanade/tachiyomi/extension/tr/sadscans/
         
-        # Minimal AndroidManifest
-        mkdir -p app/src/main
-        cat > app/src/main/AndroidManifest.xml << 'EOF'
-        <?xml version="1.0" encoding="utf-8"?>
-        <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-            package="eu.kanade.tachiyomi.extension.tr.sadscans">
-            <uses-permission android:name="android.permission.INTERNET"/>
-            <application android:label="Sadscans"/>
-        </manifest>
-        EOF
-        
-        # settings.gradle
         cat > settings.gradle << 'EOF'
-        pluginManagement {
-            repositories {
-                gradlePluginPortal()
-                google()
-                mavenCentral()
-            }
-        }
         rootProject.name = "Sadscans"
         include ':app'
         EOF
         
-        # Root build.gradle
-        cat > build.gradle << 'EOF'
-        buildscript {
-            repositories {
-                google()
-                mavenCentral()
-            }
-            dependencies {
-                classpath 'com.android.tools.build:gradle:8.1.4'
-                classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.22'
-            }
-        }
-        EOF
-        
-        # App build.gradle
         cat > app/build.gradle << 'EOF'
         plugins {
             id 'com.android.application'
-            id 'org.jetbrains.kotlin.android'
+            id 'kotlin-android'
         }
-
         android {
             namespace 'eu.kanade.tachiyomi.extension.tr.sadscans'
             compileSdk 34
-
             defaultConfig {
                 applicationId "eu.kanade.tachiyomi.extension.tr.sadscans"
                 minSdk 21
-                targetSdk 34
                 versionCode 1
-                versionName "1.0"
             }
-
             compileOptions {
                 sourceCompatibility JavaVersion.VERSION_17
                 targetCompatibility JavaVersion.VERSION_17
             }
-
-            kotlinOptions {
-                jvmTarget = '17'
-            }
         }
-
-        repositories {
-            google()
-            mavenCentral()
-        }
-
         dependencies {
-            implementation 'org.jetbrains.kotlin:kotlin-stdlib:1.9.22'
-            implementation 'org.jsoup:jsoup:1.17.2'
-            compileOnly 'com.squareup.okhttp3:okhttp:4.12.0'
+            implementation 'org.jetbrains.kotlin:kotlin-stdlib:1.9.0'
         }
         EOF
+        
+        cat > app/src/main/AndroidManifest.xml << 'EOF'
+        <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+            <application android:label="Sadscans"/>
+        </manifest>
+        EOF
     
-    - name: Build with Gradle
-      run: |
-        chmod +x ./gradlew || gradle wrapper
-        ./gradlew :app:assembleDebug --stacktrace || gradle :app:assembleDebug --stacktrace
+    - run: gradle :app:assembleDebug
       
-    - name: Upload APK
-      uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v4
       with:
         name: sadscans-apk
         path: app/build/outputs/apk/debug/*.apk
