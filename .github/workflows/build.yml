@@ -21,8 +21,7 @@ jobs:
         
     - name: Clone Tachiyomi Extensions
       run: |
-        git clone https://github.com/tachiyomiorg/tachiyomi-extensions.git
-        cd tachiyomi-extensions
+        git clone --depth 1 --single-branch --branch master https://github.com/tachiyomiorg/tachiyomi-extensions.git
         
     - name: Copy Extension Files
       run: |
