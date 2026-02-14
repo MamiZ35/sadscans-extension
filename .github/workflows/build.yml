@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-    - name: Checkout code
+    - name: Checkout
       uses: actions/checkout@v4
       
     - name: Set up JDK 17
@@ -18,131 +18,104 @@ jobs:
       with:
         java-version: '17'
         distribution: 'temurin'
-        
-    - name: Setup Android SDK
-      uses: android-actions/setup-android@v3
-      
-    - name: Create Gradle wrapper
+    
+    - name: Download Tachiyomi Stub
       run: |
-        mkdir -p gradle/wrapper
-        cat > gradle/wrapper/gradle-wrapper.properties << EOF
-        distributionBase=GRADLE_USER_HOME
-        distributionPath=wrapper/dists
-        distributionUrl=https\://services.gradle.org/distributions/gradle-8.0-bin.zip
-        zipStoreBase=GRADLE_USER_HOME
-        zipStorePath=wrapper/dists
+        mkdir -p lib
+        wget https://github.com/tachiyomiorg/tachiyomi-extensions/raw/master/lib/tachiyomi-lib-1.5.aar -O lib/tachiyomi-lib.aar || echo "Stub download failed, continuing..."
+    
+    - name: Create Simple APK Build
+      run: |
+        # Basit bir Android projesi oluştur
+        mkdir -p app/src/main/java/eu/kanade/tachiyomi/extension/tr/sadscans
+        cp src/Sadscans.kt app/src/main/java/eu/kanade/tachiyomi/extension/tr/sadscans/
+        
+        # Minimal AndroidManifest
+        mkdir -p app/src/main
+        cat > app/src/main/AndroidManifest.xml << 'EOF'
+        <?xml version="1.0" encoding="utf-8"?>
+        <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+            package="eu.kanade.tachiyomi.extension.tr.sadscans">
+            <uses-permission android:name="android.permission.INTERNET"/>
+            <application android:label="Sadscans"/>
+        </manifest>
         EOF
         
-    - name: Create build files
-      run: |
-        # settings.gradle.kts
-        cat > settings.gradle.kts << 'EOF'
-        rootProject.name = "sadscans"
+        # settings.gradle
+        cat > settings.gradle << 'EOF'
+        pluginManagement {
+            repositories {
+                gradlePluginPortal()
+                google()
+                mavenCentral()
+            }
+        }
+        rootProject.name = "Sadscans"
+        include ':app'
         EOF
         
-        # build.gradle.kts (root)
-        cat > build.gradle.kts << 'EOF'
+        # Root build.gradle
+        cat > build.gradle << 'EOF'
         buildscript {
             repositories {
                 google()
                 mavenCentral()
             }
             dependencies {
-                classpath("com.android.tools.build:gradle:8.1.0")
-                classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.0")
-            }
-        }
-        
-        plugins {
-            id("com.android.application") version "8.1.0" apply false
-            id("org.jetbrains.kotlin.android") version "1.9.0" apply false
-        }
-        
-        allprojects {
-            repositories {
-                google()
-                mavenCentral()
+                classpath 'com.android.tools.build:gradle:8.1.4'
+                classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.22'
             }
         }
         EOF
         
-        # AndroidManifest.xml
-        mkdir -p src/main
-        cat > src/main/AndroidManifest.xml << 'EOF'
-        <?xml version="1.0" encoding="utf-8"?>
-        <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-            package="eu.kanade.tachiyomi.extension.tr.sadscans">
-            <application
-                android:label="Sadscans">
-                <activity
-                    android:name=".Sadscans"
-                    android:exported="true">
-                </activity>
-            </application>
-        </manifest>
-        EOF
-        
-    - name: Update build.gradle.kts
-      run: |
-        cat > src/build.gradle.kts << 'EOF'
+        # App build.gradle
+        cat > app/build.gradle << 'EOF'
         plugins {
-            id("com.android.application")
-            id("org.jetbrains.kotlin.android")
+            id 'com.android.application'
+            id 'org.jetbrains.kotlin.android'
         }
 
         android {
-            namespace = "eu.kanade.tachiyomi.extension.tr.sadscans"
-            compileSdk = 33
+            namespace 'eu.kanade.tachiyomi.extension.tr.sadscans'
+            compileSdk 34
 
             defaultConfig {
-                applicationId = "eu.kanade.tachiyomi.extension.tr.sadscans"
-                minSdk = 21
-                targetSdk = 33
-                versionCode = 1
-                versionName = "1.0"
+                applicationId "eu.kanade.tachiyomi.extension.tr.sadscans"
+                minSdk 21
+                targetSdk 34
+                versionCode 1
+                versionName "1.0"
             }
 
-            buildTypes {
-                release {
-                    isMinifyEnabled = false
-                }
-            }
-            
             compileOptions {
-                sourceCompatibility = JavaVersion.VERSION_17
-                targetCompatibility = JavaVersion.VERSION_17
+                sourceCompatibility JavaVersion.VERSION_17
+                targetCompatibility JavaVersion.VERSION_17
             }
-            
+
             kotlinOptions {
-                jvmTarget = "17"
+                jvmTarget = '17'
             }
+        }
+
+        repositories {
+            google()
+            mavenCentral()
         }
 
         dependencies {
-            implementation("org.jetbrains.kotlin:kotlin-stdlib:1.9.0")
+            implementation 'org.jetbrains.kotlin:kotlin-stdlib:1.9.22'
+            implementation 'org.jsoup:jsoup:1.17.2'
+            compileOnly 'com.squareup.okhttp3:okhttp:4.12.0'
         }
         EOF
-        
-    - name: Move Kotlin file
+    
+    - name: Build with Gradle
       run: |
-        mkdir -p src/main/java/eu/kanade/tachiyomi/extension/tr/sadscans
-        cp src/Sadscans.kt src/main/java/eu/kanade/tachiyomi/extension/tr/sadscans/
-        
-    - name: Create Gradle wrapper files
-      run: |
-        cat > gradlew << 'EOF'
-        #!/bin/sh
-        exec gradle "$@"
-        EOF
-        chmod +x gradlew
-        
-    - name: Build APK
-      run: |
-        gradle wrapper
-        ./gradlew assembleDebug --stacktrace
-        
+        chmod +x ./gradlew || gradle wrapper
+        ./gradlew :app:assembleDebug --stacktrace || gradle :app:assembleDebug --stacktrace
+      
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
-        name: sadscans-extension
-        path: src/build/outputs/apk/debug/*.apk
+        name: sadscans-apk
+        path: app/build/outputs/apk/debug/*.apk
